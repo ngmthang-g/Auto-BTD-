@@ -1,10 +1,6 @@
 name: Build AUTO BTĐ v1.0
 
 on:
-  push:
-    branches: [ main ]
-    paths-ignore:
-      - 'dist/**'
   workflow_dispatch:
 
 permissions:
@@ -22,9 +18,10 @@ jobs:
           $parts = Get-ChildItem source_chunks\part*.txt | Sort-Object Name
           if ($parts.Count -eq 0) { throw 'source chunks missing' }
           $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
-          [IO.File]::WriteAllBytes('AUTO_BTD_v1.0_source.zip', [Convert]::FromBase64String($b64))
+          [IO.File]::WriteAllBytes('AUTO_BTD_v1.0_source.tar.xz', [Convert]::FromBase64String($b64))
           if (Test-Path work) { Remove-Item work -Recurse -Force }
-          Expand-Archive -Path AUTO_BTD_v1.0_source.zip -DestinationPath work -Force
+          New-Item -ItemType Directory -Force work | Out-Null
+          tar -xJf AUTO_BTD_v1.0_source.tar.xz -C work
 
       - name: Verify source contract
         shell: pwsh
@@ -51,7 +48,7 @@ jobs:
           New-Item -ItemType Directory -Force dist | Out-Null
           Copy-Item build\Release\AUTO_BTD_v1.0.exe dist\AUTO_BTD_v1.0.exe
           Copy-Item build\Release\ThanLongCleanRouteBridge.dll dist\ThanLongCleanRouteBridge.dll
-          Copy-Item AUTO_BTD_v1.0_source.zip dist\AUTO_BTD_v1.0_source.zip
+          Compress-Archive -Force -Path work\* -DestinationPath dist\AUTO_BTD_v1.0_source.zip
           Compress-Archive -Force -Path dist\AUTO_BTD_v1.0.exe,dist\ThanLongCleanRouteBridge.dll -DestinationPath dist\AUTO_BTD_v1.0_Windows_x64.zip
           Get-ChildItem dist -File | ForEach-Object { $h = Get-FileHash $_.FullName -Algorithm SHA256; "$($_.Name)  $($h.Hash)" } | Set-Content dist\SHA256SUMS.txt
 
