@@ -13,6 +13,7 @@ permissions:
 jobs:
   build:
     runs-on: windows-2022
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -32,16 +33,22 @@ jobs:
             if (-not (Test-Path $p)) { throw "source chunk missing: $p" }
           }
 
+          Write-Host "Reconstructing from $($ordered.Count) ordered chunks"
           $b64 = ($ordered | ForEach-Object { Get-Content $_ -Raw }) -join ''
           [IO.File]::WriteAllBytes('AUTO_BTD_v1.1_source.tar.xz', [Convert]::FromBase64String($b64))
 
           $expected = 'ee628cd44fd4c3d1e53de657bddc7059b132a19b3458a02ab144f7bdedaa7090'
           $actual = (Get-FileHash 'AUTO_BTD_v1.1_source.tar.xz' -Algorithm SHA256).Hash.ToLowerInvariant()
+          Write-Host "Source SHA256: $actual"
           if ($actual -ne $expected) { throw "source archive SHA256 mismatch: $actual" }
 
+      - name: Extract source archive
+        shell: pwsh
+        run: |
           if (Test-Path work) { Remove-Item work -Recurse -Force }
           New-Item -ItemType Directory -Force work | Out-Null
-          tar -xJf AUTO_BTD_v1.1_source.tar.xz -C work
+          python -c "import tarfile; t=tarfile.open(r'AUTO_BTD_v1.1_source.tar.xz','r:xz'); t.extractall(r'work'); t.close(); print('source extracted')"
+          if ($LASTEXITCODE -ne 0) { throw "source extraction failed: $LASTEXITCODE" }
 
       - name: Verify source contract
         shell: pwsh
