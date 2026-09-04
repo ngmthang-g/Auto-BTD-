@@ -1,4 +1,4 @@
-name: Build AUTO BTĐ v1.1
+name: Build AUTO BTĐ v1.1.1
 
 on:
   push:
@@ -15,12 +15,12 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 20
     env:
-      PYTHONUTF8: "1"
-      PYTHONIOENCODING: "utf-8"
+      PYTHONUTF8: '1'
+      PYTHONIOENCODING: 'utf-8'
     steps:
       - uses: actions/checkout@v4
 
-      - name: Reconstruct and verify source archive
+      - name: Reconstruct and verify frozen v1.1 source archive
         shell: pwsh
         run: |
           $ordered = @()
@@ -36,13 +36,12 @@ jobs:
             if (-not (Test-Path $p)) { throw "source chunk missing: $p" }
           }
 
-          Write-Host "Reconstructing from $($ordered.Count) ordered chunks"
           $b64 = ($ordered | ForEach-Object { Get-Content $_ -Raw }) -join ''
           [IO.File]::WriteAllBytes('AUTO_BTD_v1.1_source.tar.xz', [Convert]::FromBase64String($b64))
 
           $expected = 'ee628cd44fd4c3d1e53de657bddc7059b132a19b3458a02ab144f7bdedaa7090'
           $actual = (Get-FileHash 'AUTO_BTD_v1.1_source.tar.xz' -Algorithm SHA256).Hash.ToLowerInvariant()
-          Write-Host "Source SHA256: $actual"
+          Write-Host "Frozen source SHA256: $actual"
           if ($actual -ne $expected) { throw "source archive SHA256 mismatch: $actual" }
 
       - name: Extract source archive
@@ -53,7 +52,13 @@ jobs:
           python -c "import tarfile; t=tarfile.open(r'AUTO_BTD_v1.1_source.tar.xz','r:xz'); t.extractall(r'work'); t.close(); print('source extracted')"
           if ($LASTEXITCODE -ne 0) { throw "source extraction failed: $LASTEXITCODE" }
 
-      - name: Verify source contract
+      - name: Apply v1.1.1 runtime hotfix
+        shell: pwsh
+        run: |
+          python ci\apply_v111_hotfix.py work
+          if ($LASTEXITCODE -ne 0) { throw "runtime hotfix failed: $LASTEXITCODE" }
+
+      - name: Verify v1.1.1 source contract
         shell: pwsh
         run: python work\tools\verify_btd_v1.py
 
@@ -72,28 +77,29 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "$t failed: $LASTEXITCODE" }
           }
 
-      - name: Package
+      - name: Package v1.1.1
         shell: pwsh
         run: |
+          if (Test-Path dist) { Remove-Item dist -Recurse -Force }
           New-Item -ItemType Directory -Force dist | Out-Null
-          Copy-Item build\Release\AUTO_BTD_v1.1.exe dist\AUTO_BTD_v1.1.exe
+          Copy-Item build\Release\AUTO_BTD_v1.1.1.exe dist\AUTO_BTD_v1.1.1.exe
           Copy-Item build\Release\ThanLongCleanRouteBridge.dll dist\ThanLongCleanRouteBridge.dll
-          Compress-Archive -Force -Path work\* -DestinationPath dist\AUTO_BTD_v1.1_source.zip
-          Compress-Archive -Force -Path dist\AUTO_BTD_v1.1.exe,dist\ThanLongCleanRouteBridge.dll -DestinationPath dist\AUTO_BTD_v1.1_Windows_x64.zip
+          Compress-Archive -Force -Path work\* -DestinationPath dist\AUTO_BTD_v1.1.1_source.zip
+          Compress-Archive -Force -Path dist\AUTO_BTD_v1.1.1.exe,dist\ThanLongCleanRouteBridge.dll -DestinationPath dist\AUTO_BTD_v1.1.1_Windows_x64.zip
           Get-ChildItem dist -File | ForEach-Object { $h = Get-FileHash $_.FullName -Algorithm SHA256; "$($_.Name)  $($h.Hash)" } | Set-Content dist\SHA256SUMS.txt
 
       - uses: actions/upload-artifact@v4
         with:
-          name: AUTO_BTD_v1.1_Windows_x64
+          name: AUTO_BTD_v1.1.1_Windows_x64
           path: dist/*
 
-      - name: Publish binaries/source to repo
+      - name: Publish v1.1.1 binaries/source to repo
         shell: pwsh
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f dist
+          git add -f -A dist
           git diff --cached --quiet
           if ($LASTEXITCODE -eq 0) { exit 0 }
-          git commit -m "build: publish AUTO BTĐ v1.1 [skip ci]"
+          git commit -m "build: publish AUTO BTĐ v1.1.1 runtime hotfix [skip ci]"
           git push
