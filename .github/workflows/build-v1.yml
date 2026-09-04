@@ -1,4 +1,4 @@
-name: Build AUTO BTĐ v1.1.1
+name: Build AUTO BTĐ v1.2
 
 on:
   push:
@@ -24,13 +24,13 @@ jobs:
         shell: pwsh
         run: |
           $ordered = @()
-          0..12 | ForEach-Object { $ordered += ("source_chunks\\part{0:D3}.txt" -f $_) }
+          0..12 | ForEach-Object { $ordered += ("source_chunks\part{0:D3}.txt" -f $_) }
           $ordered += 'source_chunks\part013.txt'
           $ordered += 'source_chunks\part013_tail.txt'
-          14..20 | ForEach-Object { $ordered += ("source_chunks\\part{0:D3}.txt" -f $_) }
+          14..20 | ForEach-Object { $ordered += ("source_chunks\part{0:D3}.txt" -f $_) }
           $ordered += 'source_chunks\part021_fix_a.txt'
           $ordered += 'source_chunks\part021_fix_b.txt'
-          22..25 | ForEach-Object { $ordered += ("source_chunks\\part{0:D3}.txt" -f $_) }
+          22..25 | ForEach-Object { $ordered += ("source_chunks\part{0:D3}.txt" -f $_) }
 
           foreach ($p in $ordered) {
             if (-not (Test-Path $p)) { throw "source chunk missing: $p" }
@@ -58,7 +58,13 @@ jobs:
           python ci\apply_v111_hotfix.py work
           if ($LASTEXITCODE -ne 0) { throw "runtime hotfix failed: $LASTEXITCODE" }
 
-      - name: Verify v1.1.1 source contract
+      - name: Apply v1.2 visual Trừng Ác flow
+        shell: pwsh
+        run: |
+          python ci\apply_v12_visual_trungac.py work
+          if ($LASTEXITCODE -ne 0) { throw "v1.2 visual patch failed: $LASTEXITCODE" }
+
+      - name: Verify v1.2 source contract
         shell: pwsh
         run: python work\tools\verify_btd_v1.py
 
@@ -77,23 +83,23 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "$t failed: $LASTEXITCODE" }
           }
 
-      - name: Package v1.1.1
+      - name: Package v1.2
         shell: pwsh
         run: |
           if (Test-Path dist) { Remove-Item dist -Recurse -Force }
           New-Item -ItemType Directory -Force dist | Out-Null
-          Copy-Item build\Release\AUTO_BTD_v1.1.1.exe dist\AUTO_BTD_v1.1.1.exe
+          Copy-Item build\Release\AUTO_BTD_v1.2.exe dist\AUTO_BTD_v1.2.exe
           Copy-Item build\Release\ThanLongCleanRouteBridge.dll dist\ThanLongCleanRouteBridge.dll
-          Compress-Archive -Force -Path work\* -DestinationPath dist\AUTO_BTD_v1.1.1_source.zip
-          Compress-Archive -Force -Path dist\AUTO_BTD_v1.1.1.exe,dist\ThanLongCleanRouteBridge.dll -DestinationPath dist\AUTO_BTD_v1.1.1_Windows_x64.zip
+          Compress-Archive -Force -Path work\* -DestinationPath dist\AUTO_BTD_v1.2_source.zip
+          Compress-Archive -Force -Path dist\AUTO_BTD_v1.2.exe,dist\ThanLongCleanRouteBridge.dll -DestinationPath dist\AUTO_BTD_v1.2_Windows_x64.zip
           Get-ChildItem dist -File | ForEach-Object { $h = Get-FileHash $_.FullName -Algorithm SHA256; "$($_.Name)  $($h.Hash)" } | Set-Content dist\SHA256SUMS.txt
 
       - uses: actions/upload-artifact@v4
         with:
-          name: AUTO_BTD_v1.1.1_Windows_x64
+          name: AUTO_BTD_v1.2_Windows_x64
           path: dist/*
 
-      - name: Publish v1.1.1 binaries/source to repo
+      - name: Publish v1.2 binaries/source to repo
         shell: pwsh
         run: |
           git config user.name "github-actions[bot]"
@@ -101,5 +107,5 @@ jobs:
           git add -f -A dist
           git diff --cached --quiet
           if ($LASTEXITCODE -eq 0) { exit 0 }
-          git commit -m "build: publish AUTO BTĐ v1.1.1 runtime hotfix [skip ci]"
+          git commit -m "build: publish AUTO BTĐ v1.2 visual Trừng Ác [skip ci]"
           git push
