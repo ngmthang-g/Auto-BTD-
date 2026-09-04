@@ -1,6 +1,10 @@
-name: Build AUTO BTĐ v1.0
+name: Build AUTO BTĐ v1.1
 
 on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - 'dist/**'
   workflow_dispatch:
 
 permissions:
@@ -12,16 +16,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Reconstruct source archive
+      - name: Reconstruct and verify source archive
         shell: pwsh
         run: |
-          $parts = Get-ChildItem source_chunks\part*.txt | Sort-Object Name
-          if ($parts.Count -eq 0) { throw 'source chunks missing' }
-          $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
-          [IO.File]::WriteAllBytes('AUTO_BTD_v1.0_source.tar.xz', [Convert]::FromBase64String($b64))
+          $ordered = @()
+          0..12 | ForEach-Object { $ordered += ("source_chunks\\part{0:D3}.txt" -f $_) }
+          $ordered += 'source_chunks\part013.txt'
+          $ordered += 'source_chunks\part013_tail.txt'
+          14..20 | ForEach-Object { $ordered += ("source_chunks\\part{0:D3}.txt" -f $_) }
+          $ordered += 'source_chunks\part021_fix_a.txt'
+          $ordered += 'source_chunks\part021_fix_b.txt'
+          22..25 | ForEach-Object { $ordered += ("source_chunks\\part{0:D3}.txt" -f $_) }
+
+          foreach ($p in $ordered) {
+            if (-not (Test-Path $p)) { throw "source chunk missing: $p" }
+          }
+
+          $b64 = ($ordered | ForEach-Object { Get-Content $_ -Raw }) -join ''
+          [IO.File]::WriteAllBytes('AUTO_BTD_v1.1_source.tar.xz', [Convert]::FromBase64String($b64))
+
+          $expected = 'ee628cd44fd4c3d1e53de657bddc7059b132a19b3458a02ab144f7bdedaa7090'
+          $actual = (Get-FileHash 'AUTO_BTD_v1.1_source.tar.xz' -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw "source archive SHA256 mismatch: $actual" }
+
           if (Test-Path work) { Remove-Item work -Recurse -Force }
           New-Item -ItemType Directory -Force work | Out-Null
-          tar -xJf AUTO_BTD_v1.0_source.tar.xz -C work
+          tar -xJf AUTO_BTD_v1.1_source.tar.xz -C work
 
       - name: Verify source contract
         shell: pwsh
@@ -46,15 +66,15 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
-          Copy-Item build\Release\AUTO_BTD_v1.0.exe dist\AUTO_BTD_v1.0.exe
+          Copy-Item build\Release\AUTO_BTD_v1.1.exe dist\AUTO_BTD_v1.1.exe
           Copy-Item build\Release\ThanLongCleanRouteBridge.dll dist\ThanLongCleanRouteBridge.dll
-          Compress-Archive -Force -Path work\* -DestinationPath dist\AUTO_BTD_v1.0_source.zip
-          Compress-Archive -Force -Path dist\AUTO_BTD_v1.0.exe,dist\ThanLongCleanRouteBridge.dll -DestinationPath dist\AUTO_BTD_v1.0_Windows_x64.zip
+          Compress-Archive -Force -Path work\* -DestinationPath dist\AUTO_BTD_v1.1_source.zip
+          Compress-Archive -Force -Path dist\AUTO_BTD_v1.1.exe,dist\ThanLongCleanRouteBridge.dll -DestinationPath dist\AUTO_BTD_v1.1_Windows_x64.zip
           Get-ChildItem dist -File | ForEach-Object { $h = Get-FileHash $_.FullName -Algorithm SHA256; "$($_.Name)  $($h.Hash)" } | Set-Content dist\SHA256SUMS.txt
 
       - uses: actions/upload-artifact@v4
         with:
-          name: AUTO_BTD_v1.0_Windows_x64
+          name: AUTO_BTD_v1.1_Windows_x64
           path: dist/*
 
       - name: Publish binaries/source to repo
@@ -65,5 +85,5 @@ jobs:
           git add -f dist
           git diff --cached --quiet
           if ($LASTEXITCODE -eq 0) { exit 0 }
-          git commit -m "build: publish AUTO BTĐ v1.0 [skip ci]"
+          git commit -m "build: publish AUTO BTĐ v1.1 [skip ci]"
           git push
