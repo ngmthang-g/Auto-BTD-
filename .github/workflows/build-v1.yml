@@ -1,4 +1,4 @@
-name: Build AUTO BTĐ v1.2
+name: Build AUTO BTĐ v1.2.1
 
 on:
   push:
@@ -27,10 +27,10 @@ jobs:
           0..12 | ForEach-Object { $ordered += ("source_chunks\part{0:D3}.txt" -f $_) }
           $ordered += 'source_chunks\part013.txt'
           $ordered += 'source_chunks\part013_tail.txt'
-          14..20 | ForEach-Object { $ordered += ("source_chunks\part{0:D3}.txt" -f $_) }
+          14..20 | ForEach-Object { $ordered += ("source_chunks\\part{0:D3}.txt" -f $_) }
           $ordered += 'source_chunks\part021_fix_a.txt'
           $ordered += 'source_chunks\part021_fix_b.txt'
-          22..25 | ForEach-Object { $ordered += ("source_chunks\part{0:D3}.txt" -f $_) }
+          22..25 | ForEach-Object { $ordered += ("source_chunks\\part{0:D3}.txt" -f $_) }
 
           foreach ($p in $ordered) {
             if (-not (Test-Path $p)) { throw "source chunk missing: $p" }
@@ -64,7 +64,13 @@ jobs:
           python ci\apply_v12_visual_trungac.py work
           if ($LASTEXITCODE -ne 0) { throw "v1.2 visual patch failed: $LASTEXITCODE" }
 
-      - name: Verify v1.2 source contract
+      - name: Apply v1.2.1 F8 hidden drag test
+        shell: pwsh
+        run: |
+          python ci\apply_v121_drag_test.py work
+          if ($LASTEXITCODE -ne 0) { throw "v1.2.1 drag-test patch failed: $LASTEXITCODE" }
+
+      - name: Verify v1.2.1 source contract
         shell: pwsh
         run: python work\tools\verify_btd_v1.py
 
@@ -72,17 +78,7 @@ jobs:
         run: cmake -S work -B build -A x64
 
       - name: Build Release
-        shell: pwsh
-        run: |
-          cmake --build build --config Release --target AutoBTD ThanLongCleanRouteBridge route_logic_tests unity_geometry_logic_tests internal_ui_click_logic_tests travel_fight_guard_logic_tests auto_fight_retry_logic_tests travel_network_logic_tests
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host '--- controller.cpp around first v1.2 compile error ---'
-            $lines = Get-Content work\src\controller.cpp
-            for ($n = 11365; $n -le 11415; $n++) {
-              if ($n -le $lines.Count) { Write-Host ("{0,6}: {1}" -f $n, $lines[$n-1]) }
-            }
-            throw "Release build failed: $LASTEXITCODE"
-          }
+        run: cmake --build build --config Release --target AutoBTD ThanLongCleanRouteBridge route_logic_tests unity_geometry_logic_tests internal_ui_click_logic_tests travel_fight_guard_logic_tests auto_fight_retry_logic_tests travel_network_logic_tests
 
       - name: Run retained-core tests
         shell: pwsh
@@ -93,23 +89,23 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "$t failed: $LASTEXITCODE" }
           }
 
-      - name: Package v1.2
+      - name: Package v1.2.1
         shell: pwsh
         run: |
           if (Test-Path dist) { Remove-Item dist -Recurse -Force }
           New-Item -ItemType Directory -Force dist | Out-Null
-          Copy-Item build\Release\AUTO_BTD_v1.2.exe dist\AUTO_BTD_v1.2.exe
+          Copy-Item build\Release\AUTO_BTD_v1.2.1.exe dist\AUTO_BTD_v1.2.1.exe
           Copy-Item build\Release\ThanLongCleanRouteBridge.dll dist\ThanLongCleanRouteBridge.dll
-          Compress-Archive -Force -Path work\* -DestinationPath dist\AUTO_BTD_v1.2_source.zip
-          Compress-Archive -Force -Path dist\AUTO_BTD_v1.2.exe,dist\ThanLongCleanRouteBridge.dll -DestinationPath dist\AUTO_BTD_v1.2_Windows_x64.zip
+          Compress-Archive -Force -Path work\* -DestinationPath dist\AUTO_BTD_v1.2.1_source.zip
+          Compress-Archive -Force -Path dist\AUTO_BTD_v1.2.1.exe,dist\ThanLongCleanRouteBridge.dll -DestinationPath dist\AUTO_BTD_v1.2.1_Windows_x64.zip
           Get-ChildItem dist -File | ForEach-Object { $h = Get-FileHash $_.FullName -Algorithm SHA256; "$($_.Name)  $($h.Hash)" } | Set-Content dist\SHA256SUMS.txt
 
       - uses: actions/upload-artifact@v4
         with:
-          name: AUTO_BTD_v1.2_Windows_x64
+          name: AUTO_BTD_v1.2.1_Windows_x64
           path: dist/*
 
-      - name: Publish v1.2 binaries/source to repo
+      - name: Publish v1.2.1 binaries/source to repo
         shell: pwsh
         run: |
           git config user.name "github-actions[bot]"
@@ -117,5 +113,5 @@ jobs:
           git add -f -A dist
           git diff --cached --quiet
           if ($LASTEXITCODE -eq 0) { exit 0 }
-          git commit -m "build: publish AUTO BTĐ v1.2 visual Trừng Ác [skip ci]"
+          git commit -m "build: publish AUTO BTĐ v1.2.1 F8 hidden drag test [skip ci]"
           git push
