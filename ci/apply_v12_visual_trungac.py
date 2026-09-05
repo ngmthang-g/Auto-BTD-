@@ -23,6 +23,26 @@ exec(compile(code, '<v12_visual_trungac_patch>', 'exec'),
      {'__name__': '__main__', '__file__': __file__, 'sys': sys})
 
 root = Path(sys.argv[1] if len(sys.argv) > 1 else 'work').resolve()
+
+# Correct one generated brace typo in the first destination-click state. The extra
+# brace prematurely closed TickBtdAccount, which made every following phase look like
+# an illegal class-scope `if` to MSVC.
+controller_path = root / 'src' / 'controller.cpp'
+controller = controller_path.read_text(encoding='utf-8-sig')
+bad = '''            if (!BtdClickFixedPoint(a, kBtdCoord2X, kBtdCoord2Y, now, error)) {
+                BtdFail(a, L"TRUNG_AC_COORD2_FIRST_FAIL", error); return;
+            } }
+            btd.visualLastX = s.x;
+'''
+good = '''            if (!BtdClickFixedPoint(a, kBtdCoord2X, kBtdCoord2Y, now, error)) {
+                BtdFail(a, L"TRUNG_AC_COORD2_FIRST_FAIL", error); return;
+            }
+            btd.visualLastX = s.x;
+'''
+if controller.count(bad) != 1:
+    raise RuntimeError(f'v1.2 destination brace fix expected 1 match, found {controller.count(bad)}')
+controller_path.write_text(controller.replace(bad, good, 1), encoding='utf-8')
+
 verify = r'''from pathlib import Path
 import sys
 
@@ -69,6 +89,8 @@ assert 'TRUNG_AC_ORDER_VISUAL_NOT_FOUND' in controller
 assert 'TRUNG_AC_ROUTE_NO_MOVEMENT' in controller
 assert 'Elapsed(now, btd.visualStationarySince, kBtdStationaryProofMs)' in controller
 assert 'Elapsed(now, fightStart, 15000)' in controller
+assert 'TRUNG_AC_COORD2_FIRST_FAIL' in controller
+assert '} }\n            btd.visualLastX = s.x;' not in controller
 
 assert 'UpdateUIDrag' in bridge
 assert 'InputSync hidden drag PASS' in bridge
